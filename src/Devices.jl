@@ -4,6 +4,6 @@ __precompile__(true)
 
 module Devices
 
-# package code goes here
+include("device.jl")
 
 end # module
