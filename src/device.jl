@@ -27,6 +27,14 @@ abstract type Device end
 export Device
 
 
+# TODO: Which Julia version exactly?
+@static if VERSION >= v"0.7.0-DEV"
+    @inline Base.adjoint(device::Device) = getfield(device, :_internal)
+else
+    @inline Base.transpose(device::Device) = getfield(device, :_internal)
+end
+
+
 Base.@propagate_inbounds function Base.getindex(device::Device, devprop::DevProp, idxs...)
     @boundscheck checkprop(device, devprop)
     getprop(device, devprop, idxs...)
