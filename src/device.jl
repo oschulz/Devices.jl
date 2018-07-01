@@ -24,6 +24,24 @@ device type.
 """
 abstract type Device end
 
+#!!!! TODO: Replace propdims by proptype, returning something like
+# T | Array{T,N = 1|2|...}.
+
+#!!! TODO: BoundDevProp should support eltype and size, get-/setindex!
+# on Device and BoundDevProp should auto-expand colons. Treat device
+# properties similar to ordinary Scalars and Arrays. Change
+# BoundDevProp type parameters to {T,N,PropSym,D<:Device}.
+# view(::Device, property) should result in a BoundDevProp.
+# view(::BoundDevProp, idxs...) and view(::Device, property, idxs...)
+# should result in a BoundDevPropView, a BoundDevProp bound to a specific
+# (range of) channel(s).
+
+#!!! TODO: Decide on semantics of map and (customized, on Julia v0.7)
+# broadcast on BoundDevProp. Support things like dev.prop[a:b] .= scalar.
+
+#!!! TODO: Interoperability between Devices.jl and Observables.jl.
+
+
 export Device
 
 
