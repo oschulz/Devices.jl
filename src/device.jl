@@ -15,22 +15,19 @@ Base.Symbol(devprop::DevProp{PropSym}) where {PropSym} = PropSym
 
 Abstract super-type for devices. Subtypes must implement methods of
 
-* `Device.propdims`
+* `Device.proptype`
 * `Device.getprop`
 * `Device.setprop`
+
+For multi-valued properties, `Device.propsize` must also be implemented.
 
 This will implicitly provide `ndims`, `getindex` and `setindex!` for the
 device type.
 """
 abstract type Device end
 
-#!!!! TODO: Replace propdims by proptype, returning something like
-# T | Array{T,N = 1|2|...}.
-
-#!!! TODO: BoundDevProp should support eltype and size, get-/setindex!
-# on Device and BoundDevProp should auto-expand colons. Treat device
-# properties similar to ordinary Scalars and Arrays. Change
-# BoundDevProp type parameters to {T,N,PropSym,D<:Device}.
+#!!! TODO: get-/setindex! on Device and BoundDevProp should auto-expand
+# colons. Treat bound device properties similar to ordinary Arrays.
 # view(::Device, property) should result in a BoundDevProp.
 # view(::BoundDevProp, idxs...) and view(::Device, property, idxs...)
 # should result in a BoundDevPropView, a BoundDevProp bound to a specific
@@ -53,8 +50,10 @@ else
 end
 
 
+#!!!! TODO: _getindex_impl with type assertion on return value
+
 Base.@propagate_inbounds function Base.getindex(device::Device, devprop::DevProp, idxs...)
-    @boundscheck checkprop(device, devprop)
+    pt = proptype(device, devprop)
     getprop(device, devprop, idxs...)
 end
 
@@ -62,7 +61,7 @@ Base.@propagate_inbounds Base.getindex(device::Device, propsym::Symbol, idxs...)
 
 
 Base.@propagate_inbounds function Base.setindex!(device::Device, value, devprop::DevProp, idxs...)
-    @boundscheck checkprop(device, devprop)
+    pt = proptype(device, devprop)
     setprop!(device, devprop, value, idxs...)
     value
 end
@@ -82,17 +81,24 @@ _get_val_arg(::Val{x}) where x = x
 @inline Base.ndims(device::Device, propsym::Symbol) = ndims(device::Device, DevProp{propsym})
 
 
-"""
-    Device.propdims(device::Device, ::DevProp)::Val{N}
+# TODO: Document
+function proptype end
 
-Subtypes of `Device` must implement methods of `propdims` to add properties
-of dimensionality `N` to a device type. Example:
+# TODO: Document
+function propsize end
 
-    Device.propdims(device::SomeDevice, ::DevProp{:some_property}) = Val(0)
 
-will add property `:some_property` to device type `SomeDevice`.
-"""
-function propdims end
+# """
+#     Device.propdims(device::Device, ::DevProp)::Val{N}
+# 
+# Subtypes of `Device` must implement methods of `propdims` to add properties
+# of dimensionality `N` to a device type. Example:
+# 
+#     Device.propdims(device::SomeDevice, ::DevProp{:some_property}) = Val(0)
+# 
+# will add property `:some_property` to device type `SomeDevice`.
+# """
+# function propdims end
 
 
 """
@@ -110,7 +116,7 @@ function hasprop end
 
 @inline function hasprop(device::Device, devprop::DevProp)
     try
-        propdims(device, devprop)
+        proptype(device, devprop)
         true
     catch
         false
@@ -129,7 +135,7 @@ For Julia >= v0.7, `Base.propertynames(device)` is defined via
 function allprops end
 
 @inline function allprops(device::Device)
-    # TODO: Implement, e.g. via methodswith(device, Devices.propdims).
+    # TODO: Implement, e.g. via methodswith(device, Devices.proptype).
     # May need to be a generated function.
     ()
 end
@@ -181,22 +187,37 @@ instead, which wraps `setprop!` with additional steps/checks.
 function setprop! end
 
 
+#=
 function checkprop(device::Device, devprop::DevProp)
     if !hasprop(device, devprop)
         throw(ArgumentError("Device $device doesn't have a property $devprop"))
     end
     nothing    
 end
+=#
 
 
 
-struct BoundDevProp{PropSym,D<:Device}
+struct DevPropType{T,N} end
+
+export DevPropType
+
+Base.@pure Base.eltype(::Type{DevPropType{T,N}}) where {T,N} = T
+Base.@pure Base.ndims(::Type{DevPropType{T,N}}) where {T,N} = N
+Base.@pure Base.ndims(x::DevPropType) = ndims(typeof(x))
+
+
+
+struct BoundDevProp{T,N,PropSym,D<:Device}
+    proptype::DevPropType{T,N}
     property::DevProp{PropSym}
     device::D
 
     @inline function BoundDevProp{PropSym,Device}(property::DevProp{PropSym}, device::D) where {PropSym,D<:Device}
-        @boundscheck checkprop(device, property)
-        new{PropSym,Device}(property, device)
+        pt = proptype(device, property)
+        T = eltype(pt)
+        N = ndims(pt)
+        new{T,N,PropSym,Device}(pt, property, device)
     end
 end
 
@@ -212,8 +233,17 @@ export BoundDevProp
 @inline (property::DevProp)(device::Device) = BoundDevProp(property, device)
 
 
+Base.@pure Base.eltype(::Type{<:BoundDevProp{T,N}}) where {T,N} = T
+Base.@pure Base.ndims(::Type{<:BoundDevProp{T,N}}) where {T,N} = N
+@inline Base.ndims(x::BoundDevProp) = ndims(typeof(x))
+
+
 @inline Base.ndims(devprop::BoundDevProp, idxs...) =
     ndims(devprop.device, devprop.property)
+
+Base.size(devprop::BoundDevProp{T,0}) where {T} = ()
+
+Base.size(devprop::BoundDevProp) = propsize(devprop.device, devprop.property)
 
 Base.@propagate_inbounds Base.getindex(devprop::BoundDevProp, idxs...) =
     devprop.device[devprop.property, idxs...]
