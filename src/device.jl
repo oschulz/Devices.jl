@@ -42,12 +42,7 @@ abstract type Device end
 export Device
 
 
-# TODO: Which Julia version exactly?
-@static if VERSION >= v"0.7.0-DEV"
-    @inline Base.adjoint(device::Device) = getfield(device, :_internal)
-else
-    @inline Base.transpose(device::Device) = getfield(device, :_internal)
-end
+@inline Base.adjoint(device::Device) = getfield(device, :_internal)
 
 
 #!!!! TODO: _getindex_impl with type assertion on return value
@@ -252,8 +247,6 @@ Base.@propagate_inbounds Base.setindex!(devprop::BoundDevProp, value, idxs...) =
     devprop.device[devprop.property, idxs...] = value
 
 
-@static if VERSION >= v"0.7.0-DEV.3935"
-    @inline Base.getproperty(device::Device, propsym::Symbol) = DevProp(propsym)(device)
+@inline Base.getproperty(device::Device, propsym::Symbol) = DevProp(propsym)(device)
 
-    @inline Base.propertynames(device::Device) = map(Symbol, allprops(device))
-end
+@inline Base.propertynames(device::Device) = map(Symbol, allprops(device))

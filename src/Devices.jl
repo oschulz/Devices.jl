@@ -4,8 +4,6 @@ __precompile__(true)
 
 module Devices
 
-using Compat
-
 include("device.jl")
 
 end # module
